@@ -1,7 +1,7 @@
 # viewer-build-util
 
 This repository contains distinct composite actions referenced by
-[secondlife/viewer](https://github.com/secondlife/viewer). Information about
+[AlchemyViewer/Alchemy](https://github.com/AlchemyViewer/Alchemy). Information about
 each action is contained in its own README.
 
 These are actions are separate from the main viewer repository so that if any
