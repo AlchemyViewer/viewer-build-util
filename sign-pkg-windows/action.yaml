@@ -88,20 +88,24 @@ runs:
       shell: bash
       run: cat '.app/secondlife_setup_tmp.nsi'
 
+    - name: Export installer path to env
+      shell: bash
+      run: |
+        # pass installer to next steps
+        installer="$(ls -t .app/*_Setup.exe | head -n 1)"
+        echo "installer=$installer" >> "$GITHUB_ENV"
+
     - name: Sign the installer
       if: inputs.vault_uri && inputs.cert_name && inputs.client_id && inputs.client_secret && inputs.tenant_id
       shell: bash
       run: |
-        installer="$(ls -t .app/*_Setup.exe | head -n 1)"
-        # pass installer to next step
-        echo "installer=$installer" >> "$GITHUB_ENV"
         python "${{ github.action_path }}/sign.py" \
                --vault_uri "${{ inputs.vault_uri }}" \
                --cert_name "${{ inputs.cert_name }}" \
                --client_id "${{ inputs.client_id }}" \
                --client_secret "${{ inputs.client_secret }}" \
                --tenant_id "${{ inputs.tenant_id }}" \
-               "$installer"
+               "${{ env.installer }}"
 
     - name: Post the installer
       uses: actions/upload-artifact@v4
