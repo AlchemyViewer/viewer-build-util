@@ -14,27 +14,27 @@ inputs:
   cert_base64:
     description: "base64-encoded signing certificate"
     type: string
-    required: true
+    required: false
   cert_name:
     description: "full name of signing certificate"
     type: string
-    required: true
+    required: false
   cert_pass:
     description: "signing certificate password"
     type: string
-    required: true
+    required: false
   note_user:
     description: "notarization Apple ID"
     type: string
-    required: true
+    required: false
   note_pass:
     description: "password for note_user"
     type: string
-    required: true
+    required: false
   note_team:
     description: "Team ID for note_user"
     type: string
-    required: true
+    required: false
   channel_vendor_base:
     description: "setting for all steps"
     type: string
@@ -120,6 +120,7 @@ runs:
         SetFile -a C "$volpath"
 
     - name: Sign and notarize the app
+      if: inputs.cert_base64 && inputs.cert_name && inputs.cert_pass && inputs.note_user && inputs.note_pass && inputs.note_team
       shell: bash
       env:
         cert_base64: "${{ inputs.cert_base64 }}"
