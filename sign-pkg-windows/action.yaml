@@ -5,19 +5,19 @@ description:
 inputs:
   vault_uri:
     description: "Azure key vault URI"
-    required: true
+    required: false
   cert_name:
     description: "Name of certificate on Azure"
-    required: true
+    required: false
   client_id:
     description: "Azure signer app clientId"
-    required: true
+    required: false
   client_secret:
     description: "Azure signer app clientSecret"
-    required: true
+    required: false
   tenant_id:
     description: "Azure signer app tenantId"
-    required: true
+    required: false
 
 runs:
   using: composite
@@ -33,10 +33,12 @@ runs:
       run: pip install pyng
 
     - name: Install AzureSignTool
+      if: inputs.vault_uri && inputs.cert_name && inputs.client_id && inputs.client_secret && inputs.tenant_id
       shell: bash
       run: dotnet tool install --global AzureSignTool
 
     - name: Sign the executables
+      if: inputs.vault_uri && inputs.cert_name && inputs.client_id && inputs.client_secret && inputs.tenant_id
       shell: bash
       run: |
         for exe in .app/SecondLifeViewer.exe \
@@ -87,6 +89,7 @@ runs:
       run: cat '.app/secondlife_setup_tmp.nsi'
 
     - name: Sign the installer
+      if: inputs.vault_uri && inputs.cert_name && inputs.client_id && inputs.client_secret && inputs.tenant_id
       shell: bash
       run: |
         installer="$(ls -t .app/*_Setup.exe | head -n 1)"
