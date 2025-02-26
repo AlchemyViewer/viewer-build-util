@@ -168,7 +168,7 @@ runs:
         # pass installer to next step
         echo "installer=$installer" >> "$GITHUB_ENV"
 
-        hdiutil convert "${{ env.sparsename }}" -format UDZO -imagekey zlib-level=9 \
+        hdiutil convert "${{ env.sparsename }}" -format ULMO \
                 -o "$installer"
         rm "${{ env.sparsename }}"
 
