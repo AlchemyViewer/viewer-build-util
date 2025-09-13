@@ -29,6 +29,7 @@ runs:
         path: .app
 
     - name: Install Python dependencies
+      if: inputs.vault_uri && inputs.cert_name && inputs.client_id && inputs.client_secret && inputs.tenant_id
       shell: bash
       run: pip install pyng
 

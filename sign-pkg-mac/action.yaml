@@ -1,6 +1,6 @@
 name: sign-pkg-mac
 description:
-  Sign and package the macOS Linden viewer.
+  Sign and package the macOS Alchemy viewer.
 
 inputs:
   imagename:
@@ -39,7 +39,7 @@ inputs:
     description: "setting for all steps"
     type: string
     required: false
-    default: "Second Life"
+    default: "Alchemy"
 
 runs:
   using: composite
@@ -50,7 +50,7 @@ runs:
         name: macOS-app
         path: .tarball
 
-    - name: Unpack the tarball
+    - name: Unpack the tarball and set vars
       id: unpack
       shell: bash
       run: |
@@ -58,119 +58,85 @@ runs:
         mkdir -p ".app"
         tar xJf .tarball/* -C ".app"
 
-    - name: Set up the app sparseimage
-      shell: bash
-      run: |
-        set -x -e
-        # MBW -- If the mounted volume name changes, it breaks the .DS_Store's
-        #  background image and icon positioning. If we really need
-        #  differently named volumes, we'll need to create multiple DS_Store
-        #  file images, or use some other trick.
-        # DO NOT CHANGE without understanding comment above
-        volname="${{ inputs.channel_vendor_base }} Installer"
-        sparsename="${{ inputs.imagename}}.sparseimage"
-        rm "$sparsename" || true
-        echo "sparsename=$sparsename" >> "$GITHUB_ENV"
-
-        # The capacity of the .sparseimage, which sometimes needs to be
-        # changed, is hard-coded here instead of defined as an input because
-        # changing it here allows us to rerun just this job. Changing it in
-        # the viewer's build.yaml would require first rebuilding the viewer.
-        hdiutil create "$sparsename" -volname "$volname" -fs HFS+ \
-                -type SPARSE -megabytes 2000 -layout SPUD
-
-        # mount the image and get the name of the mount point and device node
-        hdi_output="$(hdiutil attach -private "$sparsename")"
-
-        # with set -e in effect, test has the force of an assert
-        [[ "$hdi_output" =~ (/dev/disk[0-9]+)[^s] ]]
-        devfile="${BASH_REMATCH[1]}"
-        echo "devfile=$devfile" >> "$GITHUB_ENV"
-        [[ "$hdi_output" =~ HFS[[:space:]]+(.+) ]]
-        volpath="${BASH_REMATCH[1]}"
-
-        # copy everything to the mounted sparseimage
-
-        # What follows is oddly based on a predefined .DS_Store file, which
-        # apparently used to be one of several -- despite the presence of
-        # dmg-cleanup.applescript since at least 2009. Leaving legacy behavior
-        # for now, albeit with files transplanted from the viewer repo.
-        dmg_prefill="${{ github.action_path }}/installer/release-dmg"
-        for f in _VolumeIcon.icns _DS_Store background.jpg
-        do
-            dest="$volpath/${f/_/.}"
-            cp -v "$dmg_prefill/$f" "$dest"
-            # hide the files used only to control the Finder display
-            SetFile -a V "$dest"
-        done
-
-        # don't forget the application itself
         artifact_app="$(ls -dt .app/*.app | head -n 1)"
-        cp -a "$artifact_app" "$volpath/"
-        app_name="$(basename "$artifact_app")"
-        echo "app_path=$volpath/$app_name" >> "$GITHUB_ENV"
+        echo "app_path=$artifact_app" >> "$GITHUB_ENV"
 
-        # Create the alias file (which is a resource file) from the .r
-        Rez "$dmg_prefill/Applications-alias.r" -o "$volpath/Applications"
+    - name: Setup Python
+      uses: actions/setup-python@v6
+      with:
+        python-version: '3.13'
 
-        # Set the alias file's alias bit
-        SetFile -a A "$volpath/Applications"
+    - name: Install Python dependencies
+      shell: bash
+      run: pip install "dmgbuild[badge_icons]"
 
-        # Set the disk image root's custom icon bit
-        SetFile -a C "$volpath"
-
-    - name: Sign and notarize the app
+    - name: Sign the app bundle
       if: inputs.cert_base64 && inputs.cert_name && inputs.cert_pass && inputs.note_user && inputs.note_pass && inputs.note_team
       shell: bash
       env:
         cert_base64: "${{ inputs.cert_base64 }}"
         cert_name: "${{ inputs.cert_name }}"
         cert_pass: "${{ inputs.cert_pass }}"
+      run: |
+        "${{ github.action_path }}/sign.sh" "${{ env.app_path }}"
+
+    - name: Build DMG
+      shell: bash
+      run: |
+        mkdir -p .installer
+        dmgbuild -s "${{ github.action_path }}/dmgsettings.py" -D app="${{ env.app_path }}" "${{ inputs.channel_vendor_base }} Installer" .installer/${{ inputs.imagename }}.dmg
+        installer=".installer/${{ inputs.imagename }}.dmg"
+        echo "installer=$installer" >> "$GITHUB_ENV"
+
+    - name: Sign and notarize the dmg
+      if: inputs.cert_base64 && inputs.cert_name && inputs.cert_pass && inputs.note_user && inputs.note_pass && inputs.note_team
+      shell: bash
+      env:
+        cert_name: "${{ inputs.cert_name }}"
         note_user: "${{ inputs.note_user }}"
         note_pass: "${{ inputs.note_pass }}"
         note_team: "${{ inputs.note_team }}"
       run: |
-        # Sign the app; do this in the copy that's in the .dmg so that the
-        # extended attributes used by the signature are preserved; moving the
-        # files would leave them behind and invalidate the signatures.
-        "${{ github.action_path }}/sign.sh" "${{ env.app_path }}"
+        codesign --verbose --force --timestamp --keychain viewer.keychain --sign "$cert_name" "${{ env.installer }}"
 
-    - name: Unmount the sparseimage
-      # unmount even if the above fails
-      if: ${{ ! cancelled() }}
-      shell: bash
-      run: |
-        # Empirically, on GitHub we've hit errors like:
-        # hdiutil: couldn't eject "disk10" - Resource busy
-        retries=3
-        retry_wait=2
-        for (( attempt=0; attempt < $retries; attempt+=1 ))
-        do
-            if [[ $attempt -gt 0 ]]
-            then
-                echo "detach $attempt failed, waiting $retry_wait seconds before retrying" >&2
-                sleep $retry_wait
-                (( retry_wait*=2 ))
-            fi
-            hdiutil detach -force ${{ env.devfile }} && break
-        done
-        if [[ $? -ne 0 ]]
-        then echo "::warning::$retries attempts to detach ${{ env.devfile }} failed"
-        fi
+        set -x -e
 
-    - name: Package the sparseimage as .dmg
-      shell: bash
-      run: |
+        credentials=(--apple-id "$note_user" --password "$note_pass" --team-id "$note_team")
+
+        # Here we send the notarization request to Apple's Notarization service,
+        # waiting for the result. This typically takes a few seconds inside a CI
+        # environment, but it might take more depending on the App characteristics.
+        # Visit the Notarization docs for more information and strategies on how to
+        # optimize it if you're curious.
+        # emit notarytool output to stderr in real time but also capture in variable
+        set +e
+        output="$(xcrun notarytool submit "${{ env.installer }}" --wait \
+                  "${credentials[@]}" 2>&1 | \
+                  tee /dev/stderr ; \
+                  exit "${PIPESTATUS[0]}")"
+        # Without the final 'exit' above, we'd be checking the rc from 'tee' rather
+        # than 'notarytool'.
+        rc=$?
+        set +x
+        [[ "$output" =~ 'id: '([^[:space:]]+) ]]
+        match=$?
         set -x
-        mkdir -p .installer
-        installer=".installer/${{ inputs.imagename }}.dmg"
-        rm "$installer" || true
-        # pass installer to next step
-        echo "installer=$installer" >> "$GITHUB_ENV"
+        # Run notarytool log if we find an id: anywhere in the output, regardless of
+        # rc: notarytool can terminate with rc 0 even if it fails.
+        if [[ $match -eq 0 ]]
+        then
+            xcrun notarytool log "${BASH_REMATCH[1]}" "${credentials[@]}"
+        fi
+        [[ $rc -ne 0 ]] && exit $rc
+        set -e
 
-        hdiutil convert "${{ env.sparsename }}" -format ULMO \
-                -o "$installer"
-        rm "${{ env.sparsename }}"
+        # Finally, we need to "attach the staple" to our executable, which will allow
+        # our app to be validated by macOS even when an internet connection is not
+        # available.
+        xcrun stapler staple "${{ env.installer }}"
+
+        spctl -a -tinstall -vvvv "${{ env.installer }}"
+        xcrun stapler validate "${{ env.installer }}"
 
     - name: Post the installer
       uses: actions/upload-artifact@v4
