@@ -23,7 +23,7 @@ runs:
   using: composite
   steps:
     - name: Fetch Windows app
-      uses: actions/download-artifact@v4
+      uses: actions/download-artifact@v5
       with:
         name: Windows-app
         path: .app
