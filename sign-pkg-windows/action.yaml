@@ -1,6 +1,6 @@
 name: sign-pkg-windows
 description:
-  Sign and package the Windows Linden viewer.
+  Sign and package the Windows Alchemy Viewer.
 
 inputs:
   vault_uri:
@@ -55,38 +55,17 @@ runs:
         done
 
     - name: Build the installer
-      id: nsis
-      shell: python
-      run: |
-        # Logic derived from viewer_manifest.py - still needed though?
-        # Use Python because bash refuses to expand "${programfiles(x86)}" --
-        # even though that's really the name of the Windows environment
-        # variable.
-        import os
-        import shlex
-        from shutil import which
-        import subprocess
-        nsis_path = which(
-            "makensis",
-            path=os.pathsep.join(
-                os.path.join(program_files, subpath)
-                for program_files in
-                (os.getenv(var) for var in ('programfiles', 'programfiles(x86)'))
-                for subpath in ('NSIS', r'NSIS\Unicode')
-                if program_files))
-        assert nsis_path
-
-        # This .nsi file was prepared by viewer_manifest.py (by substituting
-        # values into a template .nsi file) and bundled into the top level of
-        # the Windows-app artifact.
-        command = [nsis_path, '/V2', 'secondlife_setup_tmp.nsi']
-        print(shlex.join(command))
-        subprocess.check_call(command, cwd='.app')
-
-    - name: Dump NSIS input file
-      if: ${{ failure() && steps.nsis.conclusion == 'failure' }}
+      id: iscc
       shell: bash
-      run: cat '.app/secondlife_setup_tmp.nsi'
+      run: |
+        pushd ".app"
+          iscc.exe -Q alchemy_setup_tmp.iss
+        popd
+
+    - name: Dump ISS input file
+      if: ${{ failure() && steps.isccZ.conclusion == 'failure' }}
+      shell: bash
+      run: cat '.app/alchemy_setup_tmp.iss'
 
     - name: Export installer path to env
       shell: bash
