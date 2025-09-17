@@ -26,6 +26,7 @@ set -x -e
 # ****************************************************************************
 # The following is derived from
 # https://federicoterzi.com/blog/automatic-code-signing-and-notarization-for-macos-apps-using-github-actions/
+# shellcheck disable=SC2154
 base64 --decode > certificate.p12 <<< "$cert_base64"
 
 # We need to create a new keychain, otherwise using the certificate will prompt
@@ -41,6 +42,7 @@ security create-keychain -p "$keychain_pass" viewer.keychain
 security set-keychain-settings -lut 21600 viewer.keychain
 security default-keychain -s viewer.keychain
 security unlock-keychain -p "$keychain_pass" viewer.keychain
+# shellcheck disable=SC2154
 security import certificate.p12 -k viewer.keychain -P "$cert_pass" -T /usr/bin/codesign
 security set-key-partition-list -S 'apple-tool:,apple:,codesign:' -s -k "$keychain_pass" viewer.keychain
 rm certificate.p12
@@ -61,6 +63,7 @@ for signee in \
     "$plugin_contents"/Frameworks/plugins/*.dat \
     "$plugin_contents"/Frameworks/media_plugin_libvlc.dylib
 do
+    # shellcheck disable=SC2154
     codesign --verbose --force --timestamp --keychain viewer.keychain \
              --sign "$cert_name" "$signee"
 done
@@ -100,6 +103,7 @@ do
 done
 
 # SLVoice binary
+# shellcheck disable=SC2066
 for signee in \
     "$resources/SLVoice"
 do
@@ -125,6 +129,7 @@ do
 done
 
 # App Signing
+# shellcheck disable=SC2066
 for signee in \
     "$app_path"
 do
