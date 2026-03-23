@@ -28,13 +28,13 @@ runs:
   using: composite
   steps:
     - name: Download viewer exe
-      uses: actions/download-artifact@v6
+      uses: actions/download-artifact@v8
       with:
         name: Windows-app
         path: _artifacts
 
     - name: Download viewer symbols
-      uses: actions/download-artifact@v6
+      uses: actions/download-artifact@v8
       with:
         name: Windows-symbols
         path: _artifacts
