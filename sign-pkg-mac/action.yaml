@@ -45,7 +45,7 @@ runs:
   using: composite
   steps:
     - name: Fetch Mac app
-      uses: actions/download-artifact@v6
+      uses: actions/download-artifact@v8
       with:
         name: macOS-app
         path: .tarball
