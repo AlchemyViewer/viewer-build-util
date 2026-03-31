@@ -88,7 +88,7 @@ runs:
                "${{ env.installer }}"
 
     - name: Post the installer
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: "Windows-installer"
         path: ${{ env.installer }}
