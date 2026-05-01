@@ -34,7 +34,7 @@ runs:
         path: _artifacts
 
     - name: Post to BugSplat
-      uses: BugSplat-Git/symbol-upload@v10.2.5
+      uses: BugSplat-Git/symbol-upload@v10.3.2
       with:
         username: "${{ inputs.username }}"
         password: "${{ inputs.password }}"
